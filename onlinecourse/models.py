@@ -114,8 +114,13 @@ class Enrollment(models.Model):
     #        return True
     #    else:
     #        return False
+
+# NOTE: The ER Diagram and Project Spec indicate that Questions are tied 
+#         to courses, not Lessons
+#
+#       I first tied Questions to Lessons, but now I tied them to courses
 class Question(models.Model):
-    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
     question_text = models.CharField(max_length=200, default="Sample question")
     grade = models.IntegerField(default=1)
 
@@ -139,7 +144,8 @@ class Choice(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     choice_text = models.CharField(max_length=200, default="Sample Choice Content")
     is_correct = models.BooleanField(default=False)
-
+    
+# 
 # <HINT> The submission model
 # One enrollment could have multiple submission
 # One submission could have multiple choices
