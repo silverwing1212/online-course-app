@@ -104,6 +104,7 @@ def enroll(request, course_id):
 
 
 
+## PROJECT CODE (Uncommented from supplied code)
 # Basically if a check box is marked, it will appear in POST
 # If it is not marked, it will not appear in POST
 def extract_answers(request):
@@ -115,18 +116,9 @@ def extract_answers(request):
             submitted_answers.append(choice_id)
     return submitted_answers
 
-# <HINT> Create a submit view to create an exam submission record for a course enrollment,
-# you may implement it based on following logic:
-         # Get user and course object, then get the associated enrollment object created when the user enrolled the course
-         # Create a submission object referring to the enrollment
-         # Collect the selected choices from exam form
-         # Add each selected choice object to the submission object
-         # Redirect to show_exam_result with the submission id
-#def submit(request, course_id):
-
-def submit_test(request):
-    return JsonResponse({ "post": request.POST })
-
+## PROJECT CODE
+# Submit View
+# Creates an exam submission record and redirects to the exam results page
 def submit(request, course_id):
     submitted_answers = extract_answers(request)
     user = request.user
@@ -141,21 +133,10 @@ def submit(request, course_id):
     return HttpResponseRedirect(reverse(viewname='onlinecourse:show_exam_result', args=(course_id, submission.id)))
     
 
-# <HINT> A example method to collect the selected choices from the exam form from the request object
-#def extract_answers(request):
-#    submitted_anwsers = []
-#    for key in request.POST:
-#        if key.startswith('choice'):
-#            value = request.POST[key]
-#            choice_id = int(value)
-#            submitted_anwsers.append(choice_id)
-#    return submitted_anwsers
+## PROJECT CODE
+# Helper methods for compiling exam results
 
-def get_choice_score(choice):
-    if choice.is_correct:
-        return 1
-    return 0
-
+# Object for holding the result of a question from selected choices on an exam submission
 class QuestionResult:
     def __init__(self, question_text, correct_answers, chosen_answers, points_earned, points_possible):
         self.question_text = question_text
@@ -164,6 +145,7 @@ class QuestionResult:
         self.points_earned = points_earned
         self.points_possible = points_possible
 
+# Compiles a map of questions associated to correct choices
 def get_correct_answer_object(course):
     correct_answer_object = {}
     for question in course.question_set.all():
@@ -174,6 +156,7 @@ def get_correct_answer_object(course):
         correct_answer_object[question.id] = correct_answers
     return { question_id: sorted(correct_answers) for question_id, correct_answers in correct_answer_object.items() }
 
+# Compiles a map of questions associated with choices the user has submitted
 def get_chosen_answer_object(correct_answer_object, choice_list):
     chosen_answer_object = { question_id: list() for question_id, answers in correct_answer_object.items() }
     for choice in choice_list:
@@ -182,14 +165,17 @@ def get_chosen_answer_object(correct_answer_object, choice_list):
         chosen_answers.append(choice.id)
     return { question_id: sorted(chosen_answers) for question_id, chosen_answers in chosen_answer_object.items() }
 
+# Evaluates the points earned for a given question
 def get_points_earned(question, correct_answers, chosen_answers):
     if correct_answers == chosen_answers:
         return question.grade
     return 0
 
+# Accesses the text of the choice from a given choice id
 def get_choice_text(choice_id):
     return Choice.objects.filter(pk=choice_id).first().choice_text
 
+# Compiles a list of results for each question
 def get_question_results(course, choice_list):
     correct_answer_object = get_correct_answer_object(course)
     chosen_answer_object = get_chosen_answer_object(correct_answer_object, choice_list)  
@@ -206,6 +192,7 @@ def get_question_results(course, choice_list):
         question_results.append(QuestionResult(question_text, correct_answers, chosen_answers, points_earned, points_possible))
     return question_results
 
+# Compiles a grade from 0.0 - 1.0 (1.0 being the max score)
 def get_grade(question_results):
     total_points_earned = 0.0
     total_points_possible = 0.000001
@@ -214,13 +201,10 @@ def get_grade(question_results):
         total_points_possible += result.points_possible
     return total_points_earned / total_points_possible
 
-# <HINT> Create an exam result view to check if learner passed exam and show their question results and result for each question,
-# you may implement it based on the following logic:
-        # Get course and submission based on their ids
-        # Get the selected choice ids from the submission record
-        # For each selected choice, check if it is a correct answer or not
-        # Calculate the total score
-#def show_exam_result(request, course_id, submission_id):
+
+## PROJECT CODE
+# Compiles the results of each question
+# Renders the exam results page with the results of each question
 def show_exam_result(request, course_id, submission_id):
     # Set up relevant data
     course = Course.objects.filter(pk=course_id).first()
