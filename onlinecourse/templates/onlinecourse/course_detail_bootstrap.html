@@ -90,7 +90,7 @@
             <button type="button" class="btn btn-primary" data-toggle="collapse" data-target="#exam">Exam</button>
             <div id="exam" class="collapse">
                 {% if user.is_authenticated %}
-                <form id="questionform" action="point to a submit view" method="post">
+                <form id="questionform" action="{% url 'onlinecourse:submit' course_id=course.id %}" method="post">
                     {% for question in course.question_set.all %}
                         <div class="card mt-1">
                             <div class="card-header"><h5>{{ question.question_text}}</h5></div>

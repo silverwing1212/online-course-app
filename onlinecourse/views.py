@@ -1,7 +1,7 @@
 from django.shortcuts import render
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 # <HINT> Import any new Models here
-from .models import Course, Enrollment
+from .models import Course, Enrollment, Question, Choice, Submission
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
@@ -103,6 +103,18 @@ def enroll(request, course_id):
     return HttpResponseRedirect(reverse(viewname='onlinecourse:course_details', args=(course.id,)))
 
 
+
+# Basically if a check box is marked, it will appear in POST
+# If it is not marked, it will not appear in POST
+def extract_answers(request):
+    submitted_answers = []
+    for key in request.POST:
+        if key.startswith('choice'):
+            value = request.POST[key]
+            choice_id = int(value)
+            submitted_answers.append(choice_id)
+    return submitted_answers
+
 # <HINT> Create a submit view to create an exam submission record for a course enrollment,
 # you may implement it based on following logic:
          # Get user and course object, then get the associated enrollment object created when the user enrolled the course
@@ -112,6 +124,22 @@ def enroll(request, course_id):
          # Redirect to show_exam_result with the submission id
 #def submit(request, course_id):
 
+def submit_test(request):
+    return JsonResponse({ "post": request.POST })
+
+def submit(request, course_id):
+    submitted_answers = extract_answers(request)
+    user = request.user
+    course = get_object_or_404(Course, pk=course_id)
+    enrollment = Enrollment.objects.filter(user=user, course=course).first()
+    submission = Submission(enrollment=enrollment)
+    submission.save()
+    for answer_id in submitted_answers:
+        choice = Choice.objects.filter(pk = answer_id).first()
+        submission.chocies.add(choice)
+    ##return JsonResponse({ "message": "jj"})
+    return HttpResponseRedirect(reverse(viewname='onlinecourse:show_exam_result', args=(course_id, submission.id)))
+    
 
 # <HINT> A example method to collect the selected choices from the exam form from the request object
 #def extract_answers(request):
@@ -123,6 +151,68 @@ def enroll(request, course_id):
 #            submitted_anwsers.append(choice_id)
 #    return submitted_anwsers
 
+def get_choice_score(choice):
+    if choice.is_correct:
+        return 1
+    return 0
+
+class QuestionResult:
+    def __init__(self, question_text, correct_answers, chosen_answers, points_earned, points_possible):
+        self.question_text = question_text
+        self.correct_answers = correct_answers
+        self.chosen_answers = chosen_answers
+        self.points_earned = points_earned
+        self.points_possible = points_possible
+
+def get_correct_answer_object(course):
+    correct_answer_object = {}
+    for question in course.question_set.all():
+        correct_answers = []
+        for choice in question.choice_set.all():
+            if choice.is_correct:
+                correct_answers.append(choice.id)
+        correct_answer_object[question.id] = correct_answers
+    return { question_id: sorted(correct_answers) for question_id, correct_answers in correct_answer_object.items() }
+
+def get_chosen_answer_object(correct_answer_object, choice_list):
+    chosen_answer_object = { question_id: list() for question_id, answers in correct_answer_object.items() }
+    for choice in choice_list:
+        choice_question_id = choice.question.id
+        chosen_answers = chosen_answer_object[choice_question_id]
+        chosen_answers.append(choice.id)
+    return { question_id: sorted(chosen_answers) for question_id, chosen_answers in chosen_answer_object.items() }
+
+def get_points_earned(question, correct_answers, chosen_answers):
+    if correct_answers == chosen_answers:
+        return question.grade
+    return 0
+
+def get_choice_text(choice_id):
+    return Choice.objects.filter(pk=choice_id).first().choice_text
+
+def get_question_results(course, choice_list):
+    correct_answer_object = get_correct_answer_object(course)
+    chosen_answer_object = get_chosen_answer_object(correct_answer_object, choice_list)  
+    print(str(correct_answer_object))
+    print(str(chosen_answer_object))
+    question_results = []
+    for question_id in correct_answer_object:
+        question = Question.objects.filter(pk=question_id).first()
+        question_text = question.question_text
+        correct_answers = [get_choice_text(choice_id) for choice_id in correct_answer_object[question_id]]
+        chosen_answers = [get_choice_text(choice_id) for choice_id in chosen_answer_object[question_id]]
+        points_earned = get_points_earned(question, correct_answers, chosen_answers)
+        points_possible = question.grade
+        question_results.append(QuestionResult(question_text, correct_answers, chosen_answers, points_earned, points_possible))
+    return question_results
+
+def get_grade(question_results):
+    total_points_earned = 0.0
+    total_points_possible = 0.000001
+    for result in question_results:
+        total_points_earned += result.points_earned
+        total_points_possible += result.points_possible
+    return total_points_earned / total_points_possible
 
 # <HINT> Create an exam result view to check if learner passed exam and show their question results and result for each question,
 # you may implement it based on the following logic:
@@ -131,6 +221,20 @@ def enroll(request, course_id):
         # For each selected choice, check if it is a correct answer or not
         # Calculate the total score
 #def show_exam_result(request, course_id, submission_id):
+def show_exam_result(request, course_id, submission_id):
+    # Set up relevant data
+    course = Course.objects.filter(pk=course_id).first()
+    submission = Submission.objects.filter(pk=submission_id).first()
 
+    # Collect results
+    question_results = get_question_results(course, submission.chocies.all())
+    grade = get_grade(question_results)
 
+    # Set up context
+    context = {}
+    context['course'] = course
+    context['submission'] = submission
+    context['question_results'] = question_results
+    context['grade'] = int(grade * 100 + 0.001)
+    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
 
